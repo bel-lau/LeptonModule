@@ -53,17 +53,19 @@ static uint16_t delay;
 uint8_t lepton_frame_packet[VOSPI_FRAME_SIZE];
 static unsigned int lepton_image[80][80];
 
-static void save_pgm_file(void)
+static void save_jpeg_file(void) // Renamed function to "jpeg"
 {
 	int i;
 	int j;
 	unsigned int maxval = 0;
 	unsigned int minval = UINT_MAX;
 	char image_name[32];
+	char file_name[32]; //Added variable for text file naming
 	int image_index = 0;
 
 	do {
-		sprintf(image_name, "IMG_%.4d.pgm", image_index);
+		sprintf(image_name, "IMG_%.4d.jpeg", image_index); //Changed file type from .pgm to .jpeg
+		sprintf(file_name, "file_%.4d.txt", image_index); //Added line for txt file name
 		image_index += 1;
 		if (image_index > 9999) 
 		{
@@ -108,6 +110,27 @@ static void save_pgm_file(void)
 	fprintf(f,"\n\n");
 
 	fclose(f);
+	
+	/********************** Added section: Print pixel data to text file ***********************/
+	int xcounter, ycounter;
+	File *z = fopen(file_name, "w");
+	
+	if(z == NULL)
+	{
+		printf("Error opening file!\n");
+		exit(1);
+	}
+	
+	for(xcounter = 0; xcounter < 60; xcounter++)
+	{
+		for(ycounter = 0; ycounter < 80; ycounter++)
+		{
+			fprintf(z, "%d", lepton_image[xcounter][ycounter]);
+		}
+		fprintf(z, "\n");
+	}
+	fclose(z);
+	/*******************************************************************************************/
 }
 
 int transfer(int fd)
@@ -149,58 +172,64 @@ int main(int argc, char *argv[])
 	int ret = 0;
 	int fd;
 
-
-	fd = open(device, O_RDWR);
-	if (fd < 0)
+	int counter;
+	for(counter = 0; counter < 3; counter++) // Added loop to take multiple pictures
 	{
-		pabort("can't open device");
+
+		fd = open(device, O_RDWR);
+		if (fd < 0)
+		{
+			pabort("can't open device");
+		}
+
+		ret = ioctl(fd, SPI_IOC_WR_MODE, &mode);
+		if (ret == -1)
+		{
+			pabort("can't set spi mode");
+		}
+	
+		ret = ioctl(fd, SPI_IOC_RD_MODE, &mode);
+		if (ret == -1)
+		{
+			pabort("can't get spi mode");
+		}
+	
+		ret = ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
+		if (ret == -1)
+		{
+			pabort("can't set bits per word");
+		}
+
+		ret = ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &bits);
+		if (ret == -1)
+		{
+			pabort("can't get bits per word");
+		}
+	
+		ret = ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
+		if (ret == -1)
+		{
+			pabort("can't set max speed hz");
+		}
+
+		ret = ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed);
+		if (ret == -1)
+		{
+			pabort("can't get max speed hz");
+		}
+
+		printf("spi mode: %d\n", mode);
+		printf("bits per word: %d\n", bits);
+		printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
+
+		while(transfer(fd)!=59){}
+
+		close(fd);
+
+		save_jpeg_file(); // Renamed function to "jpeg"
+		
+		sleep(10); // Delay between images [in seconds]
 	}
-
-	ret = ioctl(fd, SPI_IOC_WR_MODE, &mode);
-	if (ret == -1)
-	{
-		pabort("can't set spi mode");
-	}
-
-	ret = ioctl(fd, SPI_IOC_RD_MODE, &mode);
-	if (ret == -1)
-	{
-		pabort("can't get spi mode");
-	}
-
-	ret = ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
-	if (ret == -1)
-	{
-		pabort("can't set bits per word");
-	}
-
-	ret = ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &bits);
-	if (ret == -1)
-	{
-		pabort("can't get bits per word");
-	}
-
-	ret = ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
-	if (ret == -1)
-	{
-		pabort("can't set max speed hz");
-	}
-
-	ret = ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed);
-	if (ret == -1)
-	{
-		pabort("can't get max speed hz");
-	}
-
-	printf("spi mode: %d\n", mode);
-	printf("bits per word: %d\n", bits);
-	printf("max speed: %d Hz (%d KHz)\n", speed, speed/1000);
-
-	while(transfer(fd)!=59){}
-
-	close(fd);
-
-	save_pgm_file();
 
 	return ret;
 }
